@@ -33,6 +33,7 @@
 
 extern void vApplicationIdleHook( void );
 void vLedBlink(void *pvParameters);
+void vSendIdle(void *pvParameters);
 
 TaskHandle_t ledTask;
 
@@ -57,6 +58,8 @@ int main(void)
 	
 	xTaskCreate(vQuamGen, NULL, configMINIMAL_STACK_SIZE+500, NULL, 2, NULL);
 	xTaskCreate(vQuamDec, NULL, configMINIMAL_STACK_SIZE+100, NULL, 1, NULL);
+	xTaskCreate(vSendIdle, NULL, configMINIMAL_STACK_SIZE+100, NULL, 1, NULL);
+	
 
 	vDisplayClear();
 	vDisplayWriteStringAtPos(0,0,"FreeRTOS 10.0.1");
