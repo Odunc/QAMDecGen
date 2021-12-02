@@ -36,6 +36,7 @@ void vLedBlink(void *pvParameters);
 void vSendIdle(void *pvParameters);
 
 TaskHandle_t ledTask;
+TaskHandle_t 
 
 void vApplicationIdleHook( void )
 {	
