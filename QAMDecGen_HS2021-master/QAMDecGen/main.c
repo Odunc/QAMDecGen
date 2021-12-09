@@ -115,7 +115,11 @@ void vControllTask(void *pvParameters){
 			}// end case idle
 			
 			case data_1: {
-				DataString[0] = 0b0010001; // 35 dec
+				//0b0010001
+				DataString[0] = 0b01; // 35 dec
+				DataString[1] = 0b00;
+				DataString[2] = 0b10;
+				DataString[3] = 0b00;
 				Controll = writedata;
 				break;
 			}// end case data 1
