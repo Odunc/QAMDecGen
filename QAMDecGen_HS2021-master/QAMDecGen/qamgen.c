@@ -120,7 +120,6 @@ typedef enum {
 
 TaskHandle_t xsendSymbol;
 
-EventGroupHandle_t xQAMchannel;
 
 QueueHandle_t xQueueData;
 QueueHandle_t xSymbolQueue;
@@ -133,21 +132,20 @@ void vQuamGen(void *pvParameters) {
 	}
 	xEventGroupWaitBits(evDMAState, DMAGENREADY, false, true, portMAX_DELAY);
 	
-	xQAMchannel=xEventGroupCreate();
-	 
+	
 	xQueueData		= xQueueCreate(1, sizeof(uint8_t)*NR_OF_DATA_SAMPLES);
 	xSymbolQueue	= xQueueCreate(20, sizeof(uint8_t)); 
 	
 	xTaskCreate(vsendSymbol, NULL, configMINIMAL_STACK_SIZE+400, NULL, 2, &xsendSymbol);
 	
 	for(;;) {
+		vDisplayClear();
 		vTaskDelay(10/portTICK_RATE_MS);
 		
 	}
 }
 
 void fillBuffer(uint16_t buffer[NR_OF_SAMPLES]) {
-	uint8_t EventGroupBits= xEventGroupGetBitsFromISR(xQAMchannel);	
 	uint8_t	Rx_Symbol;
 	
 	xQueueReceiveFromISR(xSymbolQueue, (void*)&Rx_Symbol,NULL );
@@ -179,8 +177,6 @@ void fillBuffer(uint16_t buffer[NR_OF_SAMPLES]) {
 		}
 
 	}//switch
-	// set Eventgroup-bit to indicate buffer is full
-	xEventGroupSetBits(xQAMchannel,Data_ready); 
 }// end void fillbuffer
 
 ISR(DMA_CH0_vect)
@@ -240,7 +236,7 @@ void vsendSymbol(void *pvParameters){
 				
 				// check if Datas are avaiable to send
 				// if not => next state Idle_1
-				if( uxQueueMessagesWaiting(xQueueData != 0)) {
+				if( uxQueueMessagesWaiting(xQueueData) != 0) {
 					Protokoll = SyncByte;
 				}
 				else{
@@ -280,10 +276,10 @@ void vsendSymbol(void *pvParameters){
 				//rx data
 				if (xQueueReceive(xQueueData, Data, pdMS_TO_TICKS(0)) == pdTRUE){
 					DataSymbolToSend = Data[0] & DATABYTETOSENDMASK;
-				
+				}
 				// send data symbol
 				if(DataSymbolCounter <= 3){
-					xQueueReceive(xQueueData, Data, pdMS_TO_TICKS(0))
+					xQueueReceive(xQueueData, Data, pdMS_TO_TICKS(0));
 					DataSymbolToSend = Data[DataSymbolCounter];
 					if( xSymbolQueue != 0){
 						if(xQueueSend(xSymbolQueue, (void*) &Length_bits[LenghtSymbolCounter], (TickType_t) 10) != pdPASS){

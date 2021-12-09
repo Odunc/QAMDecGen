@@ -74,7 +74,7 @@ int main(void)
 	initADCTimer();
 	initDecDMA();
 	
-	xTaskCreate(vQuamGen, NULL, configMINIMAL_STACK_SIZE+500, NULL, 2, NULL);
+	xTaskCreate(vQuamGen, NULL, configMINIMAL_STACK_SIZE+800, NULL, 2, NULL);
 	xTaskCreate(vQuamDec, NULL, configMINIMAL_STACK_SIZE+100, NULL, 1, NULL);
 	xTaskCreate(vControllTask, NULL, configMINIMAL_STACK_SIZE+100, NULL, 1, &xControllTask);
 	xTaskCreate(vButtonTask, (const char *) "ButtonTask", configMINIMAL_STACK_SIZE, NULL,1, NULL);
@@ -157,6 +157,6 @@ void vButtonTask(void *pvParameters) {
 		if(getButtonState(BUTTON2, false) == buttonState_Short){
 			xTaskNotify(xControllTask,BUTTON2SHORTPRESSEDMASK,eSetValueWithOverwrite);
 		}
-		vTaskDelay(10/portTICK_RATE_MS);
+		vTaskDelay(100/portTICK_RATE_MS);
 	}
 }
