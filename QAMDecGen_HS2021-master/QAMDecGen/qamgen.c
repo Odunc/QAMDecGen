@@ -136,7 +136,7 @@ void vQuamGen(void *pvParameters) {
 	xQueueData		= xQueueCreate(1, sizeof(uint8_t)*NR_OF_DATA_SAMPLES);
 	xSymbolQueue	= xQueueCreate(20, sizeof(uint8_t)); 
 	
-	xTaskCreate(vsendSymbol, NULL, configMINIMAL_STACK_SIZE+400, NULL, 2, &xsendSymbol);
+	xTaskCreate(vsendSymbol, NULL, configMINIMAL_STACK_SIZE+200, NULL, 2, &xsendSymbol);
 	
 	for(;;) {
 		vDisplayClear();
