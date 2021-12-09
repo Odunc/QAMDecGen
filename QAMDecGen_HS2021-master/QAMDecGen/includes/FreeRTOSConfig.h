@@ -107,4 +107,6 @@ to exclude the API function. */
 #define configTIMER_TASK_PRIORITY		3
 #define configTIMER_TASK_STACK_DEPTH	configMINIMAL_STACK_SIZE
 
+#define configUSE_MUTEXES				1
+
 #endif /* FREERTOS_CONFIG_H */
