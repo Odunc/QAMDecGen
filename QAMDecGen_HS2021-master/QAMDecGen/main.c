@@ -29,6 +29,7 @@
 #include "qaminit.h"
 #include "qamgen.h"
 #include "qamdec.h"
+#include "rtos_buttonhandler.h"
 
 
 
@@ -75,7 +76,7 @@ int main(void)
 	xTaskCreate(vQuamGen, NULL, configMINIMAL_STACK_SIZE+500, NULL, 2, NULL);
 	xTaskCreate(vQuamDec, NULL, configMINIMAL_STACK_SIZE+100, NULL, 1, NULL);
 	xTaskCreate(vControllTask, NULL, configMINIMAL_STACK_SIZE+100, NULL, 1, &xControllTask);
-	xTaskCreate(vButtonTask, NULL, configMINIMAL_STACK_SIZE, NULL,1, &xButtonTask);
+	xTaskCreate(vButtonTask, (const char *) "ButtonTask", configMINIMAL_STACK_SIZE, NULL,1, NULL);
 	
 
 	vDisplayClear();
@@ -133,24 +134,24 @@ void vControllTask(void *pvParameters){
 	}//end for
 }// end void
 
+
+
 void vButtonTask(void *pvParameters) {
-	(void) pvParameters;
-	initButtons();
+	initButtonHandler();
+	setupButton(BUTTON1, &PORTF, 4, 1);
+	setupButton(BUTTON2, &PORTF, 5, 1);
+	setupButton(BUTTON3, &PORTF, 6, 1);
+	setupButton(BUTTON4, &PORTF, 7, 1);
+	vTaskDelay(3000);
 	
 	for(;;) {
-		updateButtons();
-		if(getButtonPress(BUTTON1) == SHORT_PRESSED) {
-			
-			xTaskNotify(xControllTask,BUTTON1SHORTPRESSEDMASK,eSetValueWithOverwrite);			
-			
-		}
-		if(getButtonPress(BUTTON2) == SHORT_PRESSED) {
-			
-			xTaskNotify(xControllTask,BUTTON2SHORTPRESSEDMASK,eSetValueWithOverwrite);
+		if(getButtonState(BUTTON1, false) == buttonState_Short){
+			xTaskNotify(xControllTask,BUTTON1SHORTPRESSEDMASK,eSetValueWithOverwrite);	
 		}
 		
-
-		vTaskDelay((1000/BUTTON_UPDATE_FREQUENCY_HZ)/portTICK_RATE_MS);
+		if(getButtonState(BUTTON2, false) == buttonState_Short){
+			xTaskNotify(xControllTask,BUTTON2SHORTPRESSEDMASK,eSetValueWithOverwrite);
+		}
+		vTaskDelay(10/portTICK_RATE_MS);
 	}
-
 }

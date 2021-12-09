@@ -156,9 +156,6 @@
     </ToolchainSettings>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="ButtonHandler.c">
-      <SubType>compile</SubType>
-    </Compile>
     <Compile Include="driver\clksys_driver.c">
       <SubType>compile</SubType>
     </Compile>
@@ -270,9 +267,6 @@
     <Compile Include="includes\avr_compiler.h">
       <SubType>compile</SubType>
     </Compile>
-    <Compile Include="includes\ButtonHandler.h">
-      <SubType>compile</SubType>
-    </Compile>
     <Compile Include="includes\errorHandler.h">
       <SubType>compile</SubType>
     </Compile>
@@ -297,6 +291,9 @@
     <Compile Include="includes\qaminit.h">
       <SubType>compile</SubType>
     </Compile>
+    <Compile Include="includes\rtos_buttonhandler.h">
+      <SubType>compile</SubType>
+    </Compile>
     <Compile Include="includes\utils.h">
       <SubType>compile</SubType>
     </Compile>
@@ -319,6 +316,9 @@
       <SubType>compile</SubType>
     </Compile>
     <Compile Include="qaminit.c">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="rtos_buttonhandler.c">
       <SubType>compile</SubType>
     </Compile>
     <Compile Include="utils.c">
