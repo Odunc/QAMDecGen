@@ -101,6 +101,8 @@ const int16_t Symbol_11_lookup[NR_OF_SAMPLES] = {	0xc00,0xbec,0xbb2,0xb53,0xad4,
 
 EventGroupHandle_t xQAMchannel;
 
+QueueHandle_t xQueueData;
+
 
 
 void vQuamGen(void *pvParameters) {
@@ -151,8 +153,7 @@ void fillBuffer(uint16_t buffer[NR_OF_SAMPLES]) {
 
 ISR(DMA_CH0_vect)
 {
-	//static signed BaseType_t test;
-	
+	//static signed BaseType_t test;	
 	DMA.CH0.CTRLB|=0x10;
 	fillBuffer(&dacBuffer0[0]);
 }
@@ -162,3 +163,9 @@ ISR(DMA_CH1_vect)
 	DMA.CH1.CTRLB|=0x10;
 	fillBuffer(&dacBuffer1[0]);
 }
+
+void vsendCommand( uint8_t Data[]){
+	if(xQueueData != 0){
+		xQueueSend(xQueueData, (void*)Data, pdMS_TO_TICKS(10));
+	}
+}// end void send command

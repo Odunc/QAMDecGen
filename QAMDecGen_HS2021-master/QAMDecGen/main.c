@@ -31,12 +31,27 @@
 #include "qamdec.h"
 
 
-extern void vApplicationIdleHook( void );
-void vLedBlink(void *pvParameters);
-void vSendIdle(void *pvParameters);
 
-TaskHandle_t ledTask;
-TaskHandle_t 
+#define BUTTON1SHORTPRESSEDMASK     0x01
+#define BUTTON2SHORTPRESSEDMASK     0x02
+
+
+
+extern void vApplicationIdleHook( void );
+void vControllTask(void *pvParameters);
+void vButtonTask(void *pvParameters);
+
+
+TaskHandle_t xControllTask;
+TaskHandle_t xButtonTask;
+
+typedef	enum{
+	idle,
+	data_1,
+	data_2,	
+	writedata
+} eControllStates;
+
 
 void vApplicationIdleHook( void )
 {	
@@ -59,7 +74,8 @@ int main(void)
 	
 	xTaskCreate(vQuamGen, NULL, configMINIMAL_STACK_SIZE+500, NULL, 2, NULL);
 	xTaskCreate(vQuamDec, NULL, configMINIMAL_STACK_SIZE+100, NULL, 1, NULL);
-	xTaskCreate(vSendIdle, NULL, configMINIMAL_STACK_SIZE+100, NULL, 1, NULL);
+	xTaskCreate(vControllTask, NULL, configMINIMAL_STACK_SIZE+100, NULL, 1, &xControllTask);
+	xTaskCreate(vButtonTask, NULL, configMINIMAL_STACK_SIZE, NULL,1, &xButtonTask);
 	
 
 	vDisplayClear();
@@ -69,4 +85,72 @@ int main(void)
 	vDisplayWriteStringAtPos(3,0,"ResetReason: %d", reason);
 	vTaskStartScheduler();
 	return 0;
+}
+
+
+void vControllTask(void *pvParameters){
+	(void) pvParameters;
+	uint32_t Buttonvalue;
+	uint8_t DataString[33];
+	
+	eControllStates Controll = idle;
+	
+	for(;;) {
+		xTaskNotifyWait(0, 0xffffffff, &Buttonvalue, pdMS_TO_TICKS(200));
+		
+		switch( Controll){
+			case idle:{
+				if (Buttonvalue&BUTTON1SHORTPRESSEDMASK)
+				{
+					Controll=data_1;
+				}
+				
+				if (Buttonvalue&BUTTON2SHORTPRESSEDMASK)
+				{
+					Controll=data_2;
+				}
+				break;
+			}// end case idle
+			
+			case data_1: {
+				DataString[0] = 0b0010001; // 35 dec
+				Controll = writedata;
+				break;
+			}// end case data 1
+			
+			case data_2: {
+				DataString[0] = 0b10011100; // 156 dec
+				DataString[1] = 0b11000000; // 192 dec
+				Controll = writedata;
+			}// end case data_2
+			
+			case writedata: {
+				vsendCommand(DataString);
+				Controll = idle;
+				break;
+			}// end case write data
+		}// end switch		
+	}//end for
+}// end void
+
+void vButtonTask(void *pvParameters) {
+	(void) pvParameters;
+	initButtons();
+	
+	for(;;) {
+		updateButtons();
+		if(getButtonPress(BUTTON1) == SHORT_PRESSED) {
+			
+			xTaskNotify(xControllTask,BUTTON1SHORTPRESSEDMASK,eSetValueWithOverwrite);			
+			
+		}
+		if(getButtonPress(BUTTON2) == SHORT_PRESSED) {
+			
+			xTaskNotify(xControllTask,BUTTON2SHORTPRESSEDMASK,eSetValueWithOverwrite);
+		}
+		
+
+		vTaskDelay((1000/BUTTON_UPDATE_FREQUENCY_HZ)/portTICK_RATE_MS);
+	}
+
 }
