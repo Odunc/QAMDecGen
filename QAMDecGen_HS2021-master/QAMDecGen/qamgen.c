@@ -269,7 +269,7 @@ void fillBuffer(uint16_t buffer[NR_OF_SAMPLES]) {
 	Queue_Samepls = uxQueueMessagesWaitingFromISR(xSymbolQueue);
 	
 	// check if some messages in queue are avaiable
-	if( Queue_Samepls > 2){	
+	if( Queue_Samepls > 2 ){	
 		xQueueReceiveFromISR(xSymbolQueue, (void*)&Rx_Symbol,NULL );	
 		switch(Rx_Symbol){
 			case 0b00000000:{
