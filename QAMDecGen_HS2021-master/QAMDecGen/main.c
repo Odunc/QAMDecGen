@@ -74,9 +74,9 @@ int main(void)
 	initADCTimer();
 	initDecDMA();
 	
-	xTaskCreate(vQuamGen, NULL, configMINIMAL_STACK_SIZE+800, NULL, 2, NULL);
-	xTaskCreate(vQuamDec, NULL, configMINIMAL_STACK_SIZE+100, NULL, 1, NULL);
-	xTaskCreate(vControllTask, NULL, configMINIMAL_STACK_SIZE+100, NULL, 1, &xControllTask);
+	xTaskCreate(vQuamGen, NULL, configMINIMAL_STACK_SIZE+800, NULL, 3, NULL);
+	xTaskCreate(vQuamDec, NULL, configMINIMAL_STACK_SIZE+100, NULL, 2, NULL);
+	//xTaskCreate(vControllTask, (const char *) "ControllTask", configMINIMAL_STACK_SIZE, NULL, 1, NULL);
 	xTaskCreate(vButtonTask, (const char *) "ButtonTask", configMINIMAL_STACK_SIZE, NULL,1, NULL);
 	
 
@@ -89,16 +89,20 @@ int main(void)
 	return 0;
 }
 
-
-void vControllTask(void *pvParameters){
-	(void) pvParameters;
+/*
+void vControllTask(void *pvParameters) {
 	uint32_t Buttonvalue;
-	uint8_t DataString[33];
+	uint8_t DataString[10];
 	
 	eControllStates Controll = idle;
 	
 	for(;;) {
-		xTaskNotifyWait(0, 0xffffffff, &Buttonvalue, pdMS_TO_TICKS(200));
+		
+		if (getButtonState(BUTTON4,false))
+		{
+			DataString[1] = 1;
+		}
+		//xTaskNotifyWait(0, 0xffffffff, &Buttonvalue, pdMS_TO_TICKS(200));
 		
 		switch( Controll){
 			case idle:{
@@ -135,10 +139,12 @@ void vControllTask(void *pvParameters){
 				Controll = idle;
 				break;
 			}// end case write data
-		}// end switch		
+		}// end switch	
+		
+		vTaskDelay(1000/portTICK_RATE_MS);	
 	}//end for
 }// end void
-
+*/
 
 
 void vButtonTask(void *pvParameters) {
@@ -147,7 +153,7 @@ void vButtonTask(void *pvParameters) {
 	setupButton(BUTTON2, &PORTF, 5, 1);
 	setupButton(BUTTON3, &PORTF, 6, 1);
 	setupButton(BUTTON4, &PORTF, 7, 1);
-	vTaskDelay(3000);
+	vTaskDelay(300);
 	
 	for(;;) {
 		if(getButtonState(BUTTON1, false) == buttonState_Short){
@@ -157,6 +163,6 @@ void vButtonTask(void *pvParameters) {
 		if(getButtonState(BUTTON2, false) == buttonState_Short){
 			xTaskNotify(xControllTask,BUTTON2SHORTPRESSEDMASK,eSetValueWithOverwrite);
 		}
-		vTaskDelay(100/portTICK_RATE_MS);
+		vTaskDelay(10/portTICK_RATE_MS);
 	}
 }
