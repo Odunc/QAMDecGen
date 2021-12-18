@@ -22,6 +22,7 @@
 
 #include "qaminit.h"
 #include "qamgen.h"
+#include "rtos_buttonhandler.h"
 
 
 #define Symbol_00 0x10
@@ -33,6 +34,9 @@
 
 #define NR_OF_DATA_SAMPLES 8UL
 #define DATABYTETOSENDMASK 0x1F
+
+#define BUTTON1SHORTPRESSEDMASK     0x01
+#define BUTTON2SHORTPRESSEDMASK     0x02
 
 int16_t symbol_variante = 0;
 
@@ -108,9 +112,15 @@ const uint8_t Sync_bits = 0b11;
 // test lenght bits
 const uint8_t Length_bits[] = {01,00};
 	
-	
+// flag to toggle idle bits	
 volatile bool send_idle_bit_2 = false;
+volatile uint8_t x = 0;
 
+// var to store protocoll symbols for queue
+uint8_t protocoll_symbols[30] = {};
+
+volatile uint8_t	Rx_Symbol[30] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};	
+uint8_t queue_sampels;
 
 
 typedef enum {
@@ -141,8 +151,8 @@ void vQuamGen(void *pvParameters) {
 	xEventGroupWaitBits(evDMAState, DMAGENREADY, false, true, portMAX_DELAY);
 	
 	
-	xQueueData		= xQueueCreate(1, sizeof(uint8_t)*NR_OF_DATA_SAMPLES);
-	xSymbolQueue	= xQueueCreate(50, sizeof(uint8_t)); 
+	xQueueData		= xQueueCreate(1, sizeof(uint8_t));
+	xSymbolQueue	= xQueueCreate(10, sizeof(uint8_t)*30); 
 	
 	bool Datas_rdy_to_send = false;
 	uint8_t DataSymbolToSend;
@@ -152,152 +162,51 @@ void vQuamGen(void *pvParameters) {
 	
 	eProtokollStates Protokoll = Idle_1;
 	
-	
-	for(;;) {
-		switch(Protokoll){
-			case Idle_1: {
-				// send first idlebits -> Symbol 01
-				//xQueueSend(xSymbolQueue, (void*) &Idle_bits_1, (TickType_t) 10);
-				
-				if( xSymbolQueue != 0){
-					if(xQueueSend(xSymbolQueue, (void*) &Idle_bits_1, (TickType_t) 0) != pdPASS){
-						// failed to send to queue
-						Protokoll = Idle_1;
-					}
-					else{
-						Protokoll = Idle_2;
-					}
-				}
-				
-				
-				break;
-			}// end case Idle1
-			
-			case Idle_2: {
-				// send second Idlebits -> Symbol 10
-				//xQueueSend(xSymbolQueue, (void*) &Idle_bits_2, (TickType_t) 10);
-				
-				
-				if( xSymbolQueue != 0){
-					if(xQueueSend(xSymbolQueue, (void*) &Idle_bits_2, (TickType_t) 10) != pdPASS){
-						// failed to send to queue
-						Protokoll = Idle_2;
-					}
-					else{
-						// check if Datas are avaiable to send
-						// if not => next state Idle_1
-						if( uxQueueMessagesWaiting(xQueueData) != 0) {
-							Protokoll = SyncByte;
-						}
-						else{
-							Protokoll = Idle_1;
-						}
-					}
-				}
-				break;
-			}// end case Idle2
-			
-			case SyncByte: {
-				// send sync bits -> Symbol 11
-				if( xSymbolQueue != 0){
-					if(xQueueSend(xSymbolQueue, (void*) &Sync_bits, (TickType_t) 10) != pdPASS){
-						// failed to send to queue
-					}
-				}
-				
-				Protokoll = Length;
-				break;
-			}// end case SyncBites
-			
-			case Length: {
-				//send length (bits or symbol? -> TBD)
-				if( LenghtSymbolCounter <= 1){
-					if( xSymbolQueue != 0){
-						if(xQueueSend(xSymbolQueue, (void*) &Length_bits[LenghtSymbolCounter], (TickType_t) 10) != pdPASS){
-							// failed to send to queue
-						}
-						LenghtSymbolCounter++;
-					}
-				}
-				Protokoll = Datas;
-				LenghtSymbolCounter = 0;
-				break;
-			}// end case Length
-			
-			case Datas: {
-				//rx data
-				if (xQueueReceive(xQueueData, Data, pdMS_TO_TICKS(0)) == pdTRUE){
-					DataSymbolToSend = Data[0] & DATABYTETOSENDMASK;
-				}
-				// send data symbol
-				if(DataSymbolCounter <= 3){
-					xQueueReceive(xQueueData, Data, pdMS_TO_TICKS(0));
-					DataSymbolToSend = Data[DataSymbolCounter];
-					if( xSymbolQueue != 0){
-						if(xQueueSend(xSymbolQueue, (void*) &Length_bits[LenghtSymbolCounter], (TickType_t) 10) != pdPASS){
-							// failed to send to queue
-						}
-						DataSymbolCounter++;
-					}
-				}
-				DataSymbolCounter = 0;
-				Protokoll = Checksum;
-				break;
-			}// end case Datas
-			
-			
-			case Checksum: {
-				
-				
-				// after sendin Ckecksum => start again with IDLE bits
-				Protokoll = Idle_1;
-				break;
-			}// end case Checksum
-		}// end switch
+	for(;;){
 		
-		
-		
-		vTaskDelay(10/portTICK_RATE_MS);
-		
+		vTaskDelay(100/portTICK_RATE_MS);
 	}
-}
+	
+}//
 
 void fillBuffer(uint16_t buffer[NR_OF_SAMPLES]) {
-	uint8_t	Rx_Symbol;
-	uint8_t Queue_Samepls;
 	
-	Queue_Samepls = uxQueueMessagesWaitingFromISR(xSymbolQueue);
+	
+	queue_sampels = uxQueueMessagesWaitingFromISR(xSymbolQueue);
 	
 	// check if some messages in queue are avaiable
-	if( Queue_Samepls > 2 ){	
-		xQueueReceiveFromISR(xSymbolQueue, (void*)&Rx_Symbol,NULL );	
-		switch(Rx_Symbol){
-			case 0b00000000:{
-				for(int i = 0; i < NR_OF_SAMPLES;i++) {
-						buffer[i] = Symbol_00_lookup[i];
+	if( queue_sampels > 10 & send_idle_bit_2 == false){	
+		if(xQueueReceiveFromISR(xSymbolQueue, (void*)&Rx_Symbol,NULL ) == pdTRUE){			
+			switch(Rx_Symbol[x]){
+				case 0b00000000:{
+					for(int i = 0; i < NR_OF_SAMPLES;i++) {
+							buffer[i] = Symbol_00_lookup[i];
+						}
+				break;
+				}
+				case 0b00000001:{
+					for(int i = 0; i < NR_OF_SAMPLES;i++) {
+						buffer[i] = Symbol_01_lookup[i];
 					}
-			break;
-			}
-			case 0b00000001:{
-				for(int i = 0; i < NR_OF_SAMPLES;i++) {
-					buffer[i] = Symbol_01_lookup[i];
+					break;
 				}
-				break;
-			}
-			case 0b00000010:{
-				for(int i = 0; i < NR_OF_SAMPLES;i++) {
-					buffer[i] = Symbol_10_lookup[i];
+				case 0b00000010:{
+					for(int i = 0; i < NR_OF_SAMPLES;i++) {
+						buffer[i] = Symbol_10_lookup[i];
+					}
+					break;
 				}
-				break;
-			}
-			case 0b00000011:{
-				for(int i = 0; i < NR_OF_SAMPLES;i++) {
-					buffer[i] = Symbol_11_lookup[i];
+				case 0b00000011:{
+					for(int i = 0; i < NR_OF_SAMPLES;i++) {
+						buffer[i] = Symbol_11_lookup[i];
+					}
+					break;
 				}
-				break;
-			}
-		}// end if messages in queue avaiable
-	}//switch
+				
+			}// end switch
+			x++;
+		}
+	}//
 	// if no messages in queue, send idle bits, otherwise it will send allways "00" Symbol
 	else{
 		// toggle Idle bits
@@ -316,6 +225,56 @@ void fillBuffer(uint16_t buffer[NR_OF_SAMPLES]) {
 	}// end if no messages in queue
 }// end void fillbuffer
 
+
+void vButtonTask(void *pvParameters) {
+	initButtonHandler();
+	setupButton(BUTTON1, &PORTF, 4, 1);
+	setupButton(BUTTON2, &PORTF, 5, 1);
+	setupButton(BUTTON3, &PORTF, 6, 1);
+	setupButton(BUTTON4, &PORTF, 7, 1);
+	vTaskDelay(3000);
+	
+	for(;;) {
+		// Button 1 send value 35
+		// => sync (11), lenght (11) data (10 00 11)
+		if(getButtonState(BUTTON1, true) == buttonState_Idle){
+			// first add sync symbol to queue
+			protocoll_symbols[0] = Sync_bits;
+			
+			// add lenght symbol
+			protocoll_symbols[1] = 0b11;
+			
+			// data
+			protocoll_symbols[2] = 0b10;
+			protocoll_symbols[3] = 0b00;
+			protocoll_symbols[4] = 0b11;
+			
+			// send complete protocoll to queue
+			xQueueSend(xSymbolQueue, (void*) &protocoll_symbols, (TickType_t) 10);
+			
+		}
+		
+		if(getButtonState(BUTTON2, false) == buttonState_Short){
+			// first add sync symbol to queue
+			protocoll_symbols[0] = Sync_bits;
+			
+			// add lenght symbol
+			protocoll_symbols[1] = 0b11;
+			
+			// data
+			protocoll_symbols[2] = 0b10;
+			protocoll_symbols[3] = 0b00;
+			protocoll_symbols[4] = 0b11;
+			
+			// send complete protocoll to queue
+			xQueueSend(xSymbolQueue, (void*) &protocoll_symbols, (TickType_t) 10);
+		}
+		vTaskDelay(10/portTICK_RATE_MS);
+	}
+}
+
+
+
 ISR(DMA_CH0_vect)
 {
 	//static signed BaseType_t test;	
@@ -328,122 +287,3 @@ ISR(DMA_CH1_vect)
 	DMA.CH1.CTRLB|=0x10;
 	fillBuffer(&dacBuffer1[0]);
 }
-
-void vsendCommand( uint8_t Data[]){
-	if(xQueueData != 0){
-		xQueueSend(xQueueData, (void*)Data, pdMS_TO_TICKS(10));
-	}
-}// end void send command
-
-/*
-void vsendSymbol(void *pvParameters){
-	(void) pvParameters;
-	// init values
-	
-	bool Datas_rdy_to_send = false;
-	uint8_t DataSymbolToSend; 
-	uint8_t DataSymbolCounter; 
-	uint8_t LenghtSymbolCounter;
-	uint8_t Data[NR_OF_DATA_SAMPLES +1] = {}; 
-	
-	eProtokollStates Protokoll = Idle_1;
-	
-	
-	for(;;){
-		switch(Protokoll){
-			case Idle_1: {
-				// send first idlebits -> Symbol 01
-				if( xSymbolQueue != 0){
-					if(xQueueSend(xSymbolQueue, (void*) &Idle_bits_1, (TickType_t) 10) != pdPASS){
-						// failed to send to queue
-					}
-				}
-				
-				Protokoll = Idle_2;
-				break;	
-			}// end case Idle1 
-			
-			case Idle_2: {
-				// send second Idlebits -> Symbol 10
-				if( xSymbolQueue != 0){
-					if(xQueueSend(xSymbolQueue, (void*) &Idle_bits_2, (TickType_t) 10) != pdPASS){
-						// failed to send to queue
-					}
-				}
-				
-				// check if Datas are avaiable to send
-				// if not => next state Idle_1
-				if( uxQueueMessagesWaiting(xQueueData) != 0) {
-					Protokoll = SyncByte;
-				}
-				else{
-					Protokoll = Idle_1;
-				}
-				break;
-			}// end case Idle2
-			
-			case SyncByte: {
-				// send sync bits -> Symbol 11
-				if( xSymbolQueue != 0){
-					if(xQueueSend(xSymbolQueue, (void*) &Sync_bits, (TickType_t) 10) != pdPASS){
-						// failed to send to queue
-					}
-				}
-								
-				Protokoll = Length;
-				break;
-			}// end case SyncBites
-			
-			case Length: {
-				//send length (bits or symbol? -> TBD)
-				if( LenghtSymbolCounter <= 1){
-					if( xSymbolQueue != 0){
-						if(xQueueSend(xSymbolQueue, (void*) &Length_bits[LenghtSymbolCounter], (TickType_t) 10) != pdPASS){
-							// failed to send to queue
-						}
-						LenghtSymbolCounter++;
-					}
-				}				
-				Protokoll = Datas;
-				LenghtSymbolCounter = 0;
-				break;
-			}// end case Length
-			
-			case Datas: {
-				//rx data
-				if (xQueueReceive(xQueueData, Data, pdMS_TO_TICKS(0)) == pdTRUE){
-					DataSymbolToSend = Data[0] & DATABYTETOSENDMASK;
-				}
-				// send data symbol
-				if(DataSymbolCounter <= 3){
-					xQueueReceive(xQueueData, Data, pdMS_TO_TICKS(0));
-					DataSymbolToSend = Data[DataSymbolCounter];
-					if( xSymbolQueue != 0){
-						if(xQueueSend(xSymbolQueue, (void*) &Length_bits[LenghtSymbolCounter], (TickType_t) 10) != pdPASS){
-							// failed to send to queue
-						}
-						DataSymbolCounter++;
-					}
-				}
-				DataSymbolCounter = 0;
-				Protokoll = Checksum;
-				break;
-			}// end case Datas
-			
-			
-			case Checksum: {
-				
-				
-				// after sendin Ckecksum => start again with IDLE bits
-				Protokoll = Idle_1;
-				break;
-			}// end case Checksum			
-		}// end switch	
-		
-		// Data send part
-		vTaskDelay(10/portTICK_RATE_MS);
-		
-			
-	}// end for	
-}// end void sendSymbol
-*/

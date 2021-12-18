@@ -34,25 +34,12 @@
 
 
 
-#define BUTTON1SHORTPRESSEDMASK     0x01
-#define BUTTON2SHORTPRESSEDMASK     0x02
+
 
 
 
 extern void vApplicationIdleHook( void );
-void vControllTask(void *pvParameters);
-void vButtonTask(void *pvParameters);
 
-
-TaskHandle_t xControllTask;
-TaskHandle_t xButtonTask;
-
-typedef	enum{
-	idle,
-	data_1,
-	data_2,	
-	writedata
-} eControllStates;
 
 
 void vApplicationIdleHook( void )
@@ -76,8 +63,7 @@ int main(void)
 	
 	xTaskCreate(vQuamGen, NULL, configMINIMAL_STACK_SIZE+800, NULL, 3, NULL);
 	xTaskCreate(vQuamDec, NULL, configMINIMAL_STACK_SIZE+100, NULL, 2, NULL);
-	//xTaskCreate(vControllTask, (const char *) "ControllTask", configMINIMAL_STACK_SIZE, NULL, 1, NULL);
-	xTaskCreate(vButtonTask, (const char *) "ButtonTask", configMINIMAL_STACK_SIZE, NULL,1, NULL);
+	xTaskCreate(vButtonTask, (const char *) "btTask", configMINIMAL_STACK_SIZE+100, NULL,3, NULL);
 	
 
 	vDisplayClear();
@@ -89,80 +75,5 @@ int main(void)
 	return 0;
 }
 
-/*
-void vControllTask(void *pvParameters) {
-	uint32_t Buttonvalue;
-	uint8_t DataString[10];
-	
-	eControllStates Controll = idle;
-	
-	for(;;) {
-		
-		if (getButtonState(BUTTON4,false))
-		{
-			DataString[1] = 1;
-		}
-		//xTaskNotifyWait(0, 0xffffffff, &Buttonvalue, pdMS_TO_TICKS(200));
-		
-		switch( Controll){
-			case idle:{
-				if (Buttonvalue&BUTTON1SHORTPRESSEDMASK)
-				{
-					Controll=data_1;
-				}
-				
-				if (Buttonvalue&BUTTON2SHORTPRESSEDMASK)
-				{
-					Controll=data_2;
-				}
-				break;
-			}// end case idle
-			
-			case data_1: {
-				//0b0010001
-				DataString[0] = 0b01; // 35 dec
-				DataString[1] = 0b00;
-				DataString[2] = 0b10;
-				DataString[3] = 0b00;
-				Controll = writedata;
-				break;
-			}// end case data 1
-			
-			case data_2: {
-				DataString[0] = 0b10011100; // 156 dec
-				DataString[1] = 0b11000000; // 192 dec
-				Controll = writedata;
-			}// end case data_2
-			
-			case writedata: {
-				vsendCommand(DataString);
-				Controll = idle;
-				break;
-			}// end case write data
-		}// end switch	
-		
-		vTaskDelay(1000/portTICK_RATE_MS);	
-	}//end for
-}// end void
-*/
 
 
-void vButtonTask(void *pvParameters) {
-	initButtonHandler();
-	setupButton(BUTTON1, &PORTF, 4, 1);
-	setupButton(BUTTON2, &PORTF, 5, 1);
-	setupButton(BUTTON3, &PORTF, 6, 1);
-	setupButton(BUTTON4, &PORTF, 7, 1);
-	vTaskDelay(300);
-	
-	for(;;) {
-		if(getButtonState(BUTTON1, false) == buttonState_Short){
-			xTaskNotify(xControllTask,BUTTON1SHORTPRESSEDMASK,eSetValueWithOverwrite);	
-		}
-		
-		if(getButtonState(BUTTON2, false) == buttonState_Short){
-			xTaskNotify(xControllTask,BUTTON2SHORTPRESSEDMASK,eSetValueWithOverwrite);
-		}
-		vTaskDelay(10/portTICK_RATE_MS);
-	}
-}
