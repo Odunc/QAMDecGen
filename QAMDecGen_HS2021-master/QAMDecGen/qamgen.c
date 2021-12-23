@@ -114,10 +114,13 @@ const uint8_t Length_bits[] = {01,00};
 	
 // flag to toggle idle bits	
 volatile bool send_idle_bit_2 = false;
+volatile bool New_datas_rdy = false;
+volatile bool Datas_rdy	= false;
 volatile uint8_t x = 0;
 
 // var to store protocoll symbols for queue
 uint8_t protocoll_symbols[30] = {};
+uint16_t SymbolCounter = 0;
 
 volatile uint8_t	Rx_Symbol[30] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};	
 uint8_t queue_sampels;
@@ -175,37 +178,52 @@ void fillBuffer(uint16_t buffer[NR_OF_SAMPLES]) {
 	queue_sampels = uxQueueMessagesWaitingFromISR(xSymbolQueue);
 	
 	// check if some messages in queue are avaiable
-	if( queue_sampels > 10 & send_idle_bit_2 == false){	
-		if(xQueueReceiveFromISR(xSymbolQueue, (void*)&Rx_Symbol,NULL ) == pdTRUE){			
-			switch(Rx_Symbol[x]){
-				case 0b00000000:{
-					for(int i = 0; i < NR_OF_SAMPLES;i++) {
-							buffer[i] = Symbol_00_lookup[i];
-						}
+	//(queue_sampels > 2 & send_idle_bit_2 == false) |
+	if(  New_datas_rdy ){
+		// fetch them		
+		if(xQueueReceiveFromISR(xSymbolQueue, (void*)&Rx_Symbol[x],NULL ) == pdTRUE){	
+			// if succesfully reset flag
+			New_datas_rdy = false;	
+			Datas_rdy = true;
+		}
+	}
+	
+	if(Datas_rdy & !send_idle_bit_2){
+		switch(Rx_Symbol[x]){
+			case 0b00000000:{
+				for(int i = 0; i < NR_OF_SAMPLES;i++) {
+						buffer[i] = Symbol_00_lookup[i];
+					}
+			break;
+			}
+			case 0b00000001:{
+				for(int i = 0; i < NR_OF_SAMPLES;i++) {
+					buffer[i] = Symbol_01_lookup[i];
+				}
 				break;
+			}
+			case 0b00000010:{
+				for(int i = 0; i < NR_OF_SAMPLES;i++) {
+					buffer[i] = Symbol_10_lookup[i];
 				}
-				case 0b00000001:{
-					for(int i = 0; i < NR_OF_SAMPLES;i++) {
-						buffer[i] = Symbol_01_lookup[i];
-					}
-					break;
+				break;
+			}
+			case 0b00000011:{
+				for(int i = 0; i < NR_OF_SAMPLES;i++) {
+					buffer[i] = Symbol_11_lookup[i];
 				}
-				case 0b00000010:{
-					for(int i = 0; i < NR_OF_SAMPLES;i++) {
-						buffer[i] = Symbol_10_lookup[i];
-					}
-					break;
-				}
-				case 0b00000011:{
-					for(int i = 0; i < NR_OF_SAMPLES;i++) {
-						buffer[i] = Symbol_11_lookup[i];
-					}
-					break;
-				}
+				break;
+			}
 				
-			}// end switch
+		}// end switch
+		if( x < SymbolCounter){
 			x++;
 		}
+		else{
+			Datas_rdy = false;
+			x = 0;
+		}
+		
 	}//
 	// if no messages in queue, send idle bits, otherwise it will send allways "00" Symbol
 	else{
@@ -248,9 +266,11 @@ void vButtonTask(void *pvParameters) {
 			protocoll_symbols[2] = 0b10;
 			protocoll_symbols[3] = 0b00;
 			protocoll_symbols[4] = 0b11;
+			SymbolCounter = 5;
 			
 			// send complete protocoll to queue
 			xQueueSend(xSymbolQueue, (void*) &protocoll_symbols, (TickType_t) 10);
+			New_datas_rdy = true;
 			
 		}
 		
