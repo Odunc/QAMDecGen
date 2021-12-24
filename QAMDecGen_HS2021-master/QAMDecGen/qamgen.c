@@ -107,7 +107,7 @@ const uint8_t Idle_bits_1 = 0b01;
 const uint8_t Idle_bits_2 = 0b10;
 
 // const Sync bits
-const uint8_t Sync_bits = 0b11;
+const uint8_t Sync_Symbol = 0b11;
 
 // test lenght bits
 const uint8_t Length_bits[] = {01,00};
@@ -120,6 +120,7 @@ volatile uint8_t x = 0;
 
 uint8_t DataToSend = 0;
 
+
 // var to store protocoll symbols for queue
 uint8_t protocoll_symbols[30] = {};
 uint16_t SymbolCounter = 0;
@@ -128,23 +129,8 @@ volatile uint8_t	Rx_Symbol[30] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
 uint8_t queue_sampels;
 
 
-typedef enum {
-	Idle_1,
-	Idle_2,
-	SyncByte,
-	Length,
-	Datas,
-	Checksum	
-} eProtokollStates;
 
 
-//void vsendSymbol(void *pvParameters);
-
-
-//TaskHandle_t xsendSymbol;
-
-
-QueueHandle_t xQueueData;
 QueueHandle_t xSymbolQueue;
 
 
@@ -156,16 +142,13 @@ void vQuamGen(void *pvParameters) {
 	xEventGroupWaitBits(evDMAState, DMAGENREADY, false, true, portMAX_DELAY);
 	
 	
-	xQueueData		= xQueueCreate(1, sizeof(uint8_t));
 	xSymbolQueue	= xQueueCreate(10, sizeof(uint8_t)*30); 
 	
-	bool Datas_rdy_to_send = false;
 	uint8_t DataSymbolToSend;
 	uint8_t DataSymbolCounter;
 	uint8_t LenghtSymbolCounter;
 	uint8_t Data[NR_OF_DATA_SAMPLES +1] = {};
 	
-	eProtokollStates Protokoll = Idle_1;
 	
 	for(;;){
 		
@@ -215,19 +198,18 @@ void fillBuffer(uint16_t buffer[NR_OF_SAMPLES]) {
 					buffer[i] = Symbol_11_lookup[i];
 				}
 				break;
-			}
-				
+			}				
 		}// end switch
 		if( x < SymbolCounter){
 			x++;
 		}
 		else{
+			// if all datas send, reset flag
 			Datas_rdy = false;
 			x = 0;
-		}
-		
-	}//
-	// if no messages in queue, send idle bits, otherwise it will send allways "00" Symbol
+		}		
+	}
+	// if no Datas ready, send idle bits
 	else{
 		// toggle Idle bits
 		if( !send_idle_bit_2){
@@ -246,6 +228,49 @@ void fillBuffer(uint16_t buffer[NR_OF_SAMPLES]) {
 }// end void fillbuffer
 
 
+void createProtocoll( uint8_t Data_Length, uint8_t Data ){
+	uint8_t Protocoll_Index = 0;
+	uint8_t Length_Symbol = 0;
+	uint8_t Data_Symbol = 0;
+	uint32_t CheckSum	= 0;
+	uint8_t CheckSum_Symbol = 0;
+	
+	
+	// first of all, add sync symbol
+	protocoll_symbols[Protocoll_Index] = Sync_Symbol;
+	Protocoll_Index++;
+	
+	// add lenght symbol
+	for(uint8_t i = 0; i<=3; i++){
+		Length_Symbol = Data_Length >> (6 - (2*i) ) &0b11;
+		protocoll_symbols[Protocoll_Index] = Length_Symbol;
+		CheckSum += Length_Symbol;
+		Protocoll_Index++;
+	}
+	
+	// add data symbol
+	for(uint8_t i = 0; i<=3; i++){
+		Data_Symbol = Data >> (6 - (2*i) ) &0b11;
+		protocoll_symbols[Protocoll_Index] = Data_Symbol;
+		CheckSum += Data_Symbol;
+		Protocoll_Index++;
+	}
+	
+	// add checksum
+	// 16 symbols
+	for(uint8_t i =0;i<=15;i++){
+		CheckSum_Symbol = CheckSum >> (30 - (2*i)) &0b11;
+		protocoll_symbols[Protocoll_Index] = CheckSum_Symbol;
+		Protocoll_Index++;
+	}
+	
+	xQueueSend(xSymbolQueue, (void*) &protocoll_symbols, (TickType_t) 10);
+	SymbolCounter = Protocoll_Index;
+	New_datas_rdy = true;
+	
+}
+
+
 void vButtonTask(void *pvParameters) {
 	initButtonHandler();
 	setupButton(BUTTON1, &PORTF, 4, 1);
@@ -258,11 +283,19 @@ void vButtonTask(void *pvParameters) {
 	vTaskDelay(3000);
 	
 	for(;;) {
+		
+		if(getButtonState(BUTTON3, true) == buttonState_Short){
+			
+			createProtocoll(4,132);
+			
+		}
+		
+		
 		// Button 1 send value 35
 		// => sync (11), lenght (11) data (10 00 11)
 		if(getButtonState(BUTTON1, true) == buttonState_Short){
 			// first add sync symbol to queue
-			protocoll_symbols[0] = Sync_bits;
+			protocoll_symbols[0] = Sync_Symbol;
 			
 			// add lenght symbol
 			protocoll_symbols[1] = 0b11;
@@ -275,13 +308,11 @@ void vButtonTask(void *pvParameters) {
 			
 			// send complete protocoll to queue
 			xQueueSend(xSymbolQueue, (void*) &protocoll_symbols, (TickType_t) 10);
-			// may use semaphores instead of flags?
 			New_datas_rdy = true;
 			
 		}
 		
 		if(getButtonState(BUTTON2, false) == buttonState_Short){
-			// try4 auto mode, max 255
 			// ft 132
 			// 1000 0100 -> 10 00 01 00
 			// sync - lenght	- data		- checksum
@@ -290,27 +321,34 @@ void vButtonTask(void *pvParameters) {
 			
 			
 			// first add sync symbol to queue
-			protocoll_symbols[0] = Sync_bits;
-			// add lenght symbol
+			protocoll_symbols[0] = Sync_Symbol;
+			// add lenght symbol, length = 8bit => 4 symbol
 			// adjust lenght symbol, just for testing
-			protocoll_symbols[1] = 0b01;
+			
+			
+			protocoll_symbols[1] = 0b00;
 			protocoll_symbols[2] = 0b00;
+			protocoll_symbols[3] = 0b01;
+			protocoll_symbols[4] = 0b00;
 			
 			//data symbols
 			calc_symbol = DataToSend>>6 & 0b11;
-			protocoll_symbols[3] = calc_symbol;
-			calc_symbol = DataToSend>>4 & 0b11;
-			protocoll_symbols[4] = calc_symbol;
-			calc_symbol = DataToSend>>2 & 0b11;
 			protocoll_symbols[5] = calc_symbol;
-			calc_symbol = DataToSend & 0b11;
+			calc_symbol = DataToSend>>4 & 0b11;
 			protocoll_symbols[6] = calc_symbol;
+			calc_symbol = DataToSend>>2 & 0b11;
+			protocoll_symbols[7] = calc_symbol;
+			calc_symbol = DataToSend & 0b11;
+			protocoll_symbols[8] = calc_symbol;
 			
 			// checksum
-			
+			// data checksum => 10 + 00 + 01 + 00 => 3
+			// add length => 01 00 => 1 +3 = 4 => 01 00
+			protocoll_symbols[9]	= 0b01;
+			protocoll_symbols[10]	= 0b00;
 			
 			//symbol length
-			SymbolCounter = 6;
+			SymbolCounter = 10;
 			// send complete protocoll to queue
 			xQueueSend(xSymbolQueue, (void*) &protocoll_symbols, (TickType_t) 10);
 			New_datas_rdy=true;
