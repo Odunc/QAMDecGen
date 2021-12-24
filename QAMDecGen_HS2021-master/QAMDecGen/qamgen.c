@@ -25,20 +25,7 @@
 #include "rtos_buttonhandler.h"
 
 
-#define Symbol_00 0x10
-#define Symbol_01 0x20
-#define Symbol_10 0x40
-#define Symbol_11 0x80
 
-#define Data_ready 0x04
-
-#define NR_OF_DATA_SAMPLES 8UL
-#define DATABYTETOSENDMASK 0x1F
-
-#define BUTTON1SHORTPRESSEDMASK     0x01
-#define BUTTON2SHORTPRESSEDMASK     0x02
-
-int16_t symbol_variante = 0;
 
 // test sinus lookup table for 2 periods (=> 2 DMA Channels)
 // 1 DMA channel sends data to DAC
@@ -130,7 +117,7 @@ uint8_t queue_sampels;
 
 
 
-
+//------------ Queues -----------
 QueueHandle_t xSymbolQueue;
 
 
@@ -144,26 +131,14 @@ void vQuamGen(void *pvParameters) {
 	
 	xSymbolQueue	= xQueueCreate(10, sizeof(uint8_t)*30); 
 	
-	uint8_t DataSymbolToSend;
-	uint8_t DataSymbolCounter;
-	uint8_t LenghtSymbolCounter;
-	uint8_t Data[NR_OF_DATA_SAMPLES +1] = {};
-	
-	
-	for(;;){
-		
+	for(;;){		
 		vTaskDelay(100/portTICK_RATE_MS);
 	}
 	
 }//
 
 void fillBuffer(uint16_t buffer[NR_OF_SAMPLES]) {
-	
-	
-	queue_sampels = uxQueueMessagesWaitingFromISR(xSymbolQueue);
-	
-	// check if some messages in queue are avaiable
-	//(queue_sampels > 2 & send_idle_bit_2 == false) |
+		
 	if(  New_datas_rdy ){
 		// fetch them		
 		if(xQueueReceiveFromISR(xSymbolQueue, (void*)&Rx_Symbol[x],NULL ) == pdTRUE){	
@@ -173,6 +148,7 @@ void fillBuffer(uint16_t buffer[NR_OF_SAMPLES]) {
 		}
 	}
 	
+	// check previous Idle bit
 	if(Datas_rdy & !send_idle_bit_2){
 		switch(Rx_Symbol[x]){
 			case 0b00000000:{
@@ -266,8 +242,7 @@ void createProtocoll( uint8_t Data_Length, uint8_t Data ){
 	
 	xQueueSend(xSymbolQueue, (void*) &protocoll_symbols, (TickType_t) 10);
 	SymbolCounter = Protocoll_Index;
-	New_datas_rdy = true;
-	
+	New_datas_rdy = true;	
 }
 
 
@@ -276,82 +251,13 @@ void vButtonTask(void *pvParameters) {
 	setupButton(BUTTON1, &PORTF, 4, 1);
 	setupButton(BUTTON2, &PORTF, 5, 1);
 	setupButton(BUTTON3, &PORTF, 6, 1);
-	setupButton(BUTTON4, &PORTF, 7, 1);
-	
-	uint8_t calc_symbol = 0b00;
-	
+	setupButton(BUTTON4, &PORTF, 7, 1);		
 	vTaskDelay(3000);
 	
 	for(;;) {
 		
-		if(getButtonState(BUTTON3, true) == buttonState_Short){
-			
-			createProtocoll(4,132);
-			
-		}
-		
-		
-		// Button 1 send value 35
-		// => sync (11), lenght (11) data (10 00 11)
 		if(getButtonState(BUTTON1, true) == buttonState_Short){
-			// first add sync symbol to queue
-			protocoll_symbols[0] = Sync_Symbol;
-			
-			// add lenght symbol
-			protocoll_symbols[1] = 0b11;
-			
-			// data
-			protocoll_symbols[2] = 0b10;
-			protocoll_symbols[3] = 0b00;
-			protocoll_symbols[4] = 0b11;
-			SymbolCounter = 4;
-			
-			// send complete protocoll to queue
-			xQueueSend(xSymbolQueue, (void*) &protocoll_symbols, (TickType_t) 10);
-			New_datas_rdy = true;
-			
-		}
-		
-		if(getButtonState(BUTTON2, false) == buttonState_Short){
-			// ft 132
-			// 1000 0100 -> 10 00 01 00
-			// sync - lenght	- data		- checksum
-			//	11     01 00   10 00 01 00  tbd
-			DataToSend = 132;
-			
-			
-			// first add sync symbol to queue
-			protocoll_symbols[0] = Sync_Symbol;
-			// add lenght symbol, length = 8bit => 4 symbol
-			// adjust lenght symbol, just for testing
-			
-			
-			protocoll_symbols[1] = 0b00;
-			protocoll_symbols[2] = 0b00;
-			protocoll_symbols[3] = 0b01;
-			protocoll_symbols[4] = 0b00;
-			
-			//data symbols
-			calc_symbol = DataToSend>>6 & 0b11;
-			protocoll_symbols[5] = calc_symbol;
-			calc_symbol = DataToSend>>4 & 0b11;
-			protocoll_symbols[6] = calc_symbol;
-			calc_symbol = DataToSend>>2 & 0b11;
-			protocoll_symbols[7] = calc_symbol;
-			calc_symbol = DataToSend & 0b11;
-			protocoll_symbols[8] = calc_symbol;
-			
-			// checksum
-			// data checksum => 10 + 00 + 01 + 00 => 3
-			// add length => 01 00 => 1 +3 = 4 => 01 00
-			protocoll_symbols[9]	= 0b01;
-			protocoll_symbols[10]	= 0b00;
-			
-			//symbol length
-			SymbolCounter = 10;
-			// send complete protocoll to queue
-			xQueueSend(xSymbolQueue, (void*) &protocoll_symbols, (TickType_t) 10);
-			New_datas_rdy=true;
+			createProtocoll(4,132);			
 		}
 		vTaskDelay(10/portTICK_RATE_MS);
 	}
@@ -371,3 +277,71 @@ ISR(DMA_CH1_vect)
 	DMA.CH1.CTRLB|=0x10;
 	fillBuffer(&dacBuffer1[0]);
 }
+
+
+
+/* 
+// Button 1 send value 35
+// => sync (11), lenght (11) data (10 00 11)
+if(getButtonState(BUTTON1, true) == buttonState_Short){
+	// first add sync symbol to queue
+	protocoll_symbols[0] = Sync_Symbol;
+	
+	// add lenght symbol
+	protocoll_symbols[1] = 0b11;
+	
+	// data
+	protocoll_symbols[2] = 0b10;
+	protocoll_symbols[3] = 0b00;
+	protocoll_symbols[4] = 0b11;
+	SymbolCounter = 4;
+	
+	// send complete protocoll to queue
+	xQueueSend(xSymbolQueue, (void*) &protocoll_symbols, (TickType_t) 10);
+	New_datas_rdy = true;
+	
+}
+
+if(getButtonState(BUTTON2, false) == buttonState_Short){
+	// ft 132
+	// 1000 0100 -> 10 00 01 00
+	// sync - lenght	- data		- checksum
+	//	11     01 00   10 00 01 00  tbd
+	DataToSend = 132;
+	
+	
+	// first add sync symbol to queue
+	protocoll_symbols[0] = Sync_Symbol;
+	// add lenght symbol, length = 8bit => 4 symbol
+	// adjust lenght symbol, just for testing
+	
+	
+	protocoll_symbols[1] = 0b00;
+	protocoll_symbols[2] = 0b00;
+	protocoll_symbols[3] = 0b01;
+	protocoll_symbols[4] = 0b00;
+	
+	//data symbols
+	calc_symbol = DataToSend>>6 & 0b11;
+	protocoll_symbols[5] = calc_symbol;
+	calc_symbol = DataToSend>>4 & 0b11;
+	protocoll_symbols[6] = calc_symbol;
+	calc_symbol = DataToSend>>2 & 0b11;
+	protocoll_symbols[7] = calc_symbol;
+	calc_symbol = DataToSend & 0b11;
+	protocoll_symbols[8] = calc_symbol;
+	
+	// checksum
+	// data checksum => 10 + 00 + 01 + 00 => 3
+	// add length => 01 00 => 1 +3 = 4 => 01 00
+	protocoll_symbols[9]	= 0b01;
+	protocoll_symbols[10]	= 0b00;
+	
+	//symbol length
+	SymbolCounter = 10;
+	// send complete protocoll to queue
+	xQueueSend(xSymbolQueue, (void*) &protocoll_symbols, (TickType_t) 10);
+	New_datas_rdy=true;
+}
+
+*/
