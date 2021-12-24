@@ -118,6 +118,8 @@ volatile bool New_datas_rdy = false;
 volatile bool Datas_rdy	= false;
 volatile uint8_t x = 0;
 
+uint8_t DataToSend = 0;
+
 // var to store protocoll symbols for queue
 uint8_t protocoll_symbols[30] = {};
 uint16_t SymbolCounter = 0;
@@ -250,12 +252,15 @@ void vButtonTask(void *pvParameters) {
 	setupButton(BUTTON2, &PORTF, 5, 1);
 	setupButton(BUTTON3, &PORTF, 6, 1);
 	setupButton(BUTTON4, &PORTF, 7, 1);
+	
+	uint8_t calc_symbol = 0b00;
+	
 	vTaskDelay(3000);
 	
 	for(;;) {
 		// Button 1 send value 35
 		// => sync (11), lenght (11) data (10 00 11)
-		if(getButtonState(BUTTON1, true) == buttonState_Idle){
+		if(getButtonState(BUTTON1, true) == buttonState_Short){
 			// first add sync symbol to queue
 			protocoll_symbols[0] = Sync_bits;
 			
@@ -266,28 +271,49 @@ void vButtonTask(void *pvParameters) {
 			protocoll_symbols[2] = 0b10;
 			protocoll_symbols[3] = 0b00;
 			protocoll_symbols[4] = 0b11;
-			SymbolCounter = 5;
+			SymbolCounter = 4;
 			
 			// send complete protocoll to queue
 			xQueueSend(xSymbolQueue, (void*) &protocoll_symbols, (TickType_t) 10);
+			// may use semaphores instead of flags?
 			New_datas_rdy = true;
 			
 		}
 		
 		if(getButtonState(BUTTON2, false) == buttonState_Short){
+			// try4 auto mode, max 255
+			// ft 132
+			// 1000 0100 -> 10 00 01 00
+			// sync - lenght	- data		- checksum
+			//	11     01 00   10 00 01 00  tbd
+			DataToSend = 132;
+			
+			
 			// first add sync symbol to queue
 			protocoll_symbols[0] = Sync_bits;
-			
 			// add lenght symbol
-			protocoll_symbols[1] = 0b11;
+			// adjust lenght symbol, just for testing
+			protocoll_symbols[1] = 0b01;
+			protocoll_symbols[2] = 0b00;
 			
-			// data
-			protocoll_symbols[2] = 0b10;
-			protocoll_symbols[3] = 0b00;
-			protocoll_symbols[4] = 0b11;
+			//data symbols
+			calc_symbol = DataToSend>>6 & 0b11;
+			protocoll_symbols[3] = calc_symbol;
+			calc_symbol = DataToSend>>4 & 0b11;
+			protocoll_symbols[4] = calc_symbol;
+			calc_symbol = DataToSend>>2 & 0b11;
+			protocoll_symbols[5] = calc_symbol;
+			calc_symbol = DataToSend & 0b11;
+			protocoll_symbols[6] = calc_symbol;
 			
+			// checksum
+			
+			
+			//symbol length
+			SymbolCounter = 6;
 			// send complete protocoll to queue
 			xQueueSend(xSymbolQueue, (void*) &protocoll_symbols, (TickType_t) 10);
+			New_datas_rdy=true;
 		}
 		vTaskDelay(10/portTICK_RATE_MS);
 	}
