@@ -11,6 +11,7 @@
 
 void vQuamGen(void *pvParameters);
 void vButtonTask(void *pvParameters);
+void vSerialTask(void *pvParameters);
 
 
 

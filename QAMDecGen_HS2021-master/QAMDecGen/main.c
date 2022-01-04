@@ -64,6 +64,7 @@ int main(void)
 	xTaskCreate(vQuamGen, NULL, configMINIMAL_STACK_SIZE+800, NULL, 3, NULL);
 	xTaskCreate(vQuamDec, NULL, configMINIMAL_STACK_SIZE+100, NULL, 2, NULL);
 	xTaskCreate(vButtonTask, (const char *) "btTask", configMINIMAL_STACK_SIZE+100, NULL,3, NULL);
+	xTaskCreate(vSerialTask, NULL, configMINIMAL_STACK_SIZE+100,NULL,3,NULL);
 	
 
 	vDisplayClear();

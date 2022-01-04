@@ -24,14 +24,6 @@
 #include "qamgen.h"
 #include "rtos_buttonhandler.h"
 
-
-// Uart defines
-#define USART_SERIAL_EXAMPLE            &USARTC0
-#define USART_SERIAL_EXAMPLE_BAUDRATE   9600
-#define USART_SERIAL_CHAR_LENGTH        USART_CHSIZE_8BIT_gc
-#define USART_SERIAL_PARITY             USART_PMODE_DISABLED_gc
-#define USART_SERIAL_STOP_BIT           false
-
 /*
 // USART options.
 static usart_rs232_options_t USART_SERIAL_OPTIONS = {
@@ -136,7 +128,21 @@ uint8_t queue_sampels;
 //------------ Queues -----------
 QueueHandle_t xSymbolQueue;
 
+//----------- Ringbuffer--------
+#define BUFFER_SIZE      8	// max 255 symbols => 63 bytes => 63 ASCII-Zeiche
 
+typedef struct
+{
+	uint8_t* InPtr;
+	uint8_t* OutPtr;
+	uint8_t* RingStart;
+	uint8_t* RingEnd;
+	uint16_t Size;
+	uint16_t ByteCount;
+} RingBuffer_t;
+
+uint8_t USART_Data[BUFFER_SIZE];
+RingBuffer_t Buffer;
 
 void vQuamGen(void *pvParameters) {
 	while(evDMAState == NULL) {
@@ -144,20 +150,7 @@ void vQuamGen(void *pvParameters) {
 	}
 	xEventGroupWaitBits(evDMAState, DMAGENREADY, false, true, portMAX_DELAY);
 	
-	// baudrat 9600
-	USARTC0.BAUDCTRLA = 0xD0 & 0xFF;
-	USARTC0.BAUDCTRLB |= ((0 & 0x0F) << 0x04);
-	
-	USARTC0.CTRLA = USART_RXCINTLVL_LO_gc;
-	USARTC0.STATUS |= USART_RXCIF_bm;
-	
-	USARTC0.CTRLB = USART_TXEN_bm | USART_RXEN_bm;
-	USARTC0.CTRLC = USART_CHSIZE_8BIT_gc;
-	USARTC0.CTRLC &= ~(USART_PMODE0_bm | USART_PMODE1_bm | USART_SBMODE_bm);
-	PORTC.DIR = 0x08;
-	
-	while(!(USARTC0.STATUS & USART_DREIF_bm));
-	USARTC0.DATA = 'G';
+
 	
 	xSymbolQueue	= xQueueCreate(10, sizeof(uint8_t)*30); 
 	
@@ -275,25 +268,122 @@ void createProtocoll( uint8_t Data_Length, uint8_t Data ){
 	New_datas_rdy = true;	
 }
 
-
 void vButtonTask(void *pvParameters) {
 	initButtonHandler();
 	setupButton(BUTTON1, &PORTF, 4, 1);
 	setupButton(BUTTON2, &PORTF, 5, 1);
 	setupButton(BUTTON3, &PORTF, 6, 1);
-	setupButton(BUTTON4, &PORTF, 7, 1);		
+	setupButton(BUTTON4, &PORTF, 7, 1);
 	vTaskDelay(3000);
 	
 	for(;;) {
 		
 		if(getButtonState(BUTTON1, true) == buttonState_Short){
-			createProtocoll(4,132);			
+			createProtocoll(4,132);
 		}
 		vTaskDelay(10/portTICK_RATE_MS);
 	}
 }
 
+void RingBuffer_Init(RingBuffer_t* Buffer, uint8_t* Data, const uint16_t Size)
+{
+	Buffer->InPtr = Data;
+	Buffer->OutPtr = Data;
+	Buffer->RingStart = &Data[0];
+	Buffer->RingEnd = &Data[Size];
+	Buffer->Size = Size;
+	Buffer->ByteCount = 0;
+}
 
+void RingBuffer_Save(RingBuffer_t* Buffer, const uint8_t Data)
+{
+	*Buffer->InPtr = Data;
+	if(++Buffer->InPtr == Buffer->RingEnd)
+	{
+		Buffer->InPtr = Buffer->RingStart;
+	}
+	Buffer->ByteCount++;
+}
+
+uint8_t RingBuffer_IsFull(const RingBuffer_t* Buffer)
+{
+	return (Buffer->ByteCount == Buffer->Size);
+}
+
+uint8_t RingBuffer_Load(RingBuffer_t* Buffer)
+{
+	uint8_t Data = *Buffer->OutPtr;
+	if(++Buffer->OutPtr == Buffer->RingEnd)
+	{
+		Buffer->OutPtr = Buffer->RingStart;
+	}
+	Buffer->ByteCount--;
+	return Data;
+}
+
+
+
+void vSerialTask(void *pvParameters){
+	// baudrat 9600
+	USARTC0.BAUDCTRLA = 0xD0 & 0xFF;
+	USARTC0.BAUDCTRLB |= ((0 & 0x0F) << 0x04);
+	USARTC0.CTRLA = USART_RXCINTLVL_LO_gc;
+	USARTC0.STATUS |= USART_RXCIF_bm;
+	USARTC0.CTRLB = USART_TXEN_bm | USART_RXEN_bm;
+	USARTC0.CTRLC = USART_CHSIZE_8BIT_gc;
+	USARTC0.CTRLC &= ~(USART_PMODE0_bm | USART_PMODE1_bm | USART_SBMODE_bm);
+	PORTC.DIR = 0x08;
+	
+	char* Data = "Starting up";
+	while(*Data)
+	{
+		while(!(USARTC0.STATUS & USART_DREIF_bm));
+		USARTC0.DATA = *Data++;
+	}
+	
+	
+	RingBuffer_Init(&Buffer, USART_Data, BUFFER_SIZE);
+	
+	
+	for(;;){
+		// check if buffer is full
+		if(RingBuffer_IsFull(&Buffer))
+		{
+			while(!(USARTC0.STATUS & USART_DREIF_bm));
+			USARTC0.DATA = 0x0D;
+			while(!(USARTC0.STATUS & USART_DREIF_bm));
+			USARTC0.DATA = 0x0A;
+		}
+		
+	}
+}
+
+//------- Interrupts ---------------------
+
+ISR(USARTC0_RXC_vect)
+{
+	uint8_t Data = USARTC0.DATA;
+	RingBuffer_Save(&Buffer, Data);
+	USARTC0.DATA = Data;
+	// if data = 13 -> "Enter"
+	if(RingBuffer_IsFull(&Buffer))
+	{
+		while(!(USARTC0.STATUS & USART_DREIF_bm));
+		USARTC0.DATA = 0x0D;
+		while(!(USARTC0.STATUS & USART_DREIF_bm));
+		USARTC0.DATA = 0x0A;
+		
+		for(uint8_t i = 0; i < BUFFER_SIZE; i++)
+		{
+			while(!(USARTC0.STATUS & USART_DREIF_bm));
+			USARTC0.DATA = RingBuffer_Load(&Buffer);
+		}
+		while(!(USARTC0.STATUS & USART_DREIF_bm));
+		USARTC0.DATA = 0x0D;
+		while(!(USARTC0.STATUS & USART_DREIF_bm));
+		USARTC0.DATA = 0x0A;
+	}
+}
 
 ISR(DMA_CH0_vect)
 {
@@ -309,6 +399,25 @@ ISR(DMA_CH1_vect)
 }
 
 
+
+/*	
+	
+	while(!(USARTC0.STATUS & USART_DREIF_bm));
+	USARTC0.DATA = 'G';
+	
+	
+	char* Data = "Hello, World";
+	while(*Data)
+	{
+		while(!(USARTC0.STATUS & USART_DREIF_bm));
+		USARTC0.DATA = *Data++;
+	}
+	
+	PMIC.CTRL = PMIC_LOLVLEN_bm;
+	sei();
+
+
+*/
 
 /* 
 // Button 1 send value 35
