@@ -25,6 +25,22 @@
 #include "rtos_buttonhandler.h"
 
 
+// Uart defines
+#define USART_SERIAL_EXAMPLE            &USARTC0
+#define USART_SERIAL_EXAMPLE_BAUDRATE   9600
+#define USART_SERIAL_CHAR_LENGTH        USART_CHSIZE_8BIT_gc
+#define USART_SERIAL_PARITY             USART_PMODE_DISABLED_gc
+#define USART_SERIAL_STOP_BIT           false
+
+/*
+// USART options.
+static usart_rs232_options_t USART_SERIAL_OPTIONS = {
+	.baudrate = USART_SERIAL_EXAMPLE_BAUDRATE,
+	.charlength = USART_SERIAL_CHAR_LENGTH,
+	.paritytype = USART_SERIAL_PARITY,
+	.stopbits = USART_SERIAL_STOP_BIT
+};
+*/
 
 
 // test sinus lookup table for 2 periods (=> 2 DMA Channels)
@@ -128,6 +144,20 @@ void vQuamGen(void *pvParameters) {
 	}
 	xEventGroupWaitBits(evDMAState, DMAGENREADY, false, true, portMAX_DELAY);
 	
+	// baudrat 9600
+	USARTC0.BAUDCTRLA = 0xD0 & 0xFF;
+	USARTC0.BAUDCTRLB |= ((0 & 0x0F) << 0x04);
+	
+	USARTC0.CTRLA = USART_RXCINTLVL_LO_gc;
+	USARTC0.STATUS |= USART_RXCIF_bm;
+	
+	USARTC0.CTRLB = USART_TXEN_bm | USART_RXEN_bm;
+	USARTC0.CTRLC = USART_CHSIZE_8BIT_gc;
+	USARTC0.CTRLC &= ~(USART_PMODE0_bm | USART_PMODE1_bm | USART_SBMODE_bm);
+	PORTC.DIR = 0x08;
+	
+	while(!(USARTC0.STATUS & USART_DREIF_bm));
+	USARTC0.DATA = 'G';
 	
 	xSymbolQueue	= xQueueCreate(10, sizeof(uint8_t)*30); 
 	
