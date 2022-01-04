@@ -334,7 +334,7 @@ void vSerialTask(void *pvParameters){
 	USARTC0.CTRLC &= ~(USART_PMODE0_bm | USART_PMODE1_bm | USART_SBMODE_bm);
 	PORTC.DIR = 0x08;
 	
-	char* Data = "Starting up";
+	char* Data = "Starting up \n";
 	while(*Data)
 	{
 		while(!(USARTC0.STATUS & USART_DREIF_bm));
