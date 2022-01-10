@@ -76,20 +76,19 @@ const int16_t Symbol_11_lookup[NR_OF_SAMPLES] = {
 											0x800,0x8c8,0x988,0xa39,0xad4,0xb53,0xbb2,0xbec
 											};
 
+
+//-----------const symbols-----------------------
 // const Idle Bit's
 const uint8_t Idle_bits_1 = 0b01;
 const uint8_t Idle_bits_2 = 0b10;
-
 // const Sync bits
 const uint8_t Sync_Symbol = 0b11;
 
-// test lenght bits
-const uint8_t Length_bits[] = {01,00};
-	
-// flag to toggle idle bits	
-volatile bool send_idle_bit_2 = false;
-volatile bool New_datas_rdy = false;
-volatile bool Datas_rdy	= false;
+
+//---------fill buffer (ISR) -------------------	
+volatile bool send_idle_bit_2 = false;	// flag to toggle idle bits	
+volatile bool New_datas_rdy = false;	// datas from createProtocoll ready flag
+volatile bool Datas_rdy	= false;		// data readed from queue flag
 
 
 volatile uint8_t x = 0;
@@ -104,7 +103,7 @@ uint16_t SymbolCounter = 0;
 volatile uint8_t	Rx_Symbol[276] = {};	
 uint8_t queue_sampels;
 
-//---- Uart ISR ------------------------
+//------------ Uart ISR ------------------------
 volatile uint8_t ASCII_AR[50] = {};
 volatile uint8_t ASCII_Counter = 0;
 volatile bool	 ASCII_Datas_rdy = false;
@@ -113,7 +112,7 @@ uint8_t	ASCII_Buffer[50]={};
 uint8_t ASCII_Length;
 
 
-//------------ Queues -----------
+//------------ Queues ------------------------------
 QueueHandle_t xSymbolQueue;
 QueueHandle_t xASCIIQueue;
 
