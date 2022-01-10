@@ -90,6 +90,8 @@ const uint8_t Length_bits[] = {01,00};
 volatile bool send_idle_bit_2 = false;
 volatile bool New_datas_rdy = false;
 volatile bool Datas_rdy	= false;
+
+
 volatile uint8_t x = 0;
 
 uint8_t DataToSend = 0;
@@ -102,10 +104,11 @@ uint16_t SymbolCounter = 0;
 volatile uint8_t	Rx_Symbol[276] = {};	
 uint8_t queue_sampels;
 
-//---- Datas from Uart ISR ------------------------
+//---- Uart ISR ------------------------
 volatile uint8_t ASCII_AR[50] = {};
 volatile uint8_t ASCII_Counter = 0;
 volatile bool	 ASCII_Datas_rdy = false;
+
 uint8_t	ASCII_Buffer[50]={};
 uint8_t ASCII_Length;
 
@@ -114,21 +117,6 @@ uint8_t ASCII_Length;
 QueueHandle_t xSymbolQueue;
 QueueHandle_t xASCIIQueue;
 
-//----------- Ringbuffer--------
-#define BUFFER_SIZE      52	// max 255 symbols => 63 bytes => 63 ASCII-Zeiche
-
-typedef struct
-{
-	uint8_t* InPtr;
-	uint8_t* OutPtr;
-	uint8_t* RingStart;
-	uint8_t* RingEnd;
-	uint16_t Size;
-	uint16_t ByteCount;
-} RingBuffer_t;
-
-uint8_t USART_Data[BUFFER_SIZE];
-RingBuffer_t Buffer;
 
 void vQuamGen(void *pvParameters) {
 	while(evDMAState == NULL) {
@@ -141,22 +129,24 @@ void vQuamGen(void *pvParameters) {
 	uint8_t i;
 	char* SendConfString = "Data sent: \n";
 	
-	xSymbolQueue	= xQueueCreate(10, sizeof(uint8_t)*30); 
+	xSymbolQueue	= xQueueCreate(1, sizeof(uint8_t)*276); 
 	xASCIIQueue		= xQueueCreate(1, sizeof(uint8_t)*50);
 	
 	for(;;){
 		
 		if(ASCII_Datas_rdy){
 			if(xQueueReceive(xASCIIQueue, (void*)&ASCII_Buffer[i], portMAX_DELAY) == pdTRUE){
-				ASCII_Datas_rdy = false;	
+				ASCII_Datas_rdy = false;
+				// clear array, has to changed	
 				for(uint8_t i; i<=50; i++){
-					ASCII_AR[i] = 0;
+					ASCII_AR[i] = 0; 
 				}
+				// send confirmation
 				while(*SendConfString){
 					while(!(USARTC0.STATUS & USART_DREIF_bm));
 					USARTC0.DATA = *SendConfString++;
 				}
-				while(!(USARTC0.STATUS & USART_DREIF_bm));
+				//create Protocoll
 				createProtocoll(ASCII_Length);
 								
 			}
@@ -254,8 +244,7 @@ void createProtocoll( uint8_t Data_Length){
 		Protocoll_Index++;
 	}
 	
-	// add data symbol
-	
+	// add data symbol	
 	for(uint8_t i = 0; i < Data_Length; i++){	// do 4 every uint8 in data
 		for(uint8_t y = 0; y <=3; y++){			// 
 			Data_Symbol = (ASCII_Buffer[Dataindex] >> (6-(2*y))) & 0b11;
@@ -264,17 +253,7 @@ void createProtocoll( uint8_t Data_Length){
 			Protocoll_Index++;
 		}
 		Dataindex++;
-	}
-	
-	
-	/* for uint8
-	for(uint8_t i = 0; i<=3; i++){
-		Data_Symbol = Data >> (6 - (2*i) ) &0b11;
-		protocoll_symbols[Protocoll_Index] = Data_Symbol;
-		CheckSum += Data_Symbol;
-		Protocoll_Index++;
-	}*/
-	
+	}		
 	// add checksum
 	// 16 symbols
 	for(uint8_t i =0;i<=15;i++){
@@ -286,7 +265,7 @@ void createProtocoll( uint8_t Data_Length){
 	xQueueSend(xSymbolQueue, (void*) &protocoll_symbols, (TickType_t) 10);
 	SymbolCounter = Protocoll_Index;
 	New_datas_rdy = true;	
-}
+}// End create protocoll
 
 void vButtonTask(void *pvParameters) {
 	initButtonHandler();
