@@ -25,7 +25,6 @@
 #include "rtos_buttonhandler.h"
 
 
-// test sinus lookup table for 2 periods (=> 2 DMA Channels)
 // 1 DMA channel sends data to DAC
 // => second DMA channel refill with datas
 const int16_t Symbol_00_lookup[NR_OF_SAMPLES] = {	
@@ -276,8 +275,7 @@ ISR(USARTC0_RXC_vect)
 	uint8_t Data = USARTC0.DATA;
 	USARTC0.DATA = Data;
 	ASCII_AR[ASCII_Counter] = Data;
-	ASCII_Counter++;
-	
+	ASCII_Counter++;	
 	if ((ASCII_Counter == 50) | (Data == 13)){
 		ASCII_Datas_rdy = true;
 		xQueueSendFromISR(xASCIIQueue, (void*) &ASCII_AR, NULL);
@@ -285,6 +283,8 @@ ISR(USARTC0_RXC_vect)
 		ASCII_Counter=0;
 	}	
 }
+
+
 
 ISR(DMA_CH0_vect)
 {

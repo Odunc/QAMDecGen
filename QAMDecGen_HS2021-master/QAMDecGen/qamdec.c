@@ -234,8 +234,8 @@ void vTaskProtocol(void *pvParameters) {
 									USARTC0.DATA = *SendConfString++;
 								}
 								*/
-								while(!(USARTC0.STATUS & USART_DREIF_bm));
-								USARTC0.DATA = data[i];
+								//while(!(USARTC0.STATUS & USART_DREIF_bm));
+								//USARTC0.DATA = data[i];
 								/*
 								while(*SendNewLineChar){
 									while(!(USARTC0.STATUS & USART_DREIF_bm));
