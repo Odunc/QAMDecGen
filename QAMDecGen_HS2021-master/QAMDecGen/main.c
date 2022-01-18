@@ -30,12 +30,6 @@
 #include "qamgen.h"
 #include "qamdec.h"
 
-#include "rtos_buttonhandler.h"
-
-
-
-
-
 
 
 extern void vApplicationIdleHook( void );
@@ -61,9 +55,8 @@ int main(void)
 	initADCTimer();
 	initDecDMA();
 	
-	xTaskCreate(vQuamGen, NULL, configMINIMAL_STACK_SIZE+800, NULL, 3, NULL);
-	xTaskCreate(vQuamDec, NULL, configMINIMAL_STACK_SIZE+100, NULL, 2, NULL);
-	xTaskCreate(vButtonTask, (const char *) "btTask", configMINIMAL_STACK_SIZE+100, NULL,3, NULL);
+	xTaskCreate(vQuamGen, NULL, configMINIMAL_STACK_SIZE+800, NULL, 4, NULL);
+	vQuamDec();
 	
 
 	vDisplayClear();

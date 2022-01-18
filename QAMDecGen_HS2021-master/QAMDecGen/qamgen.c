@@ -24,30 +24,10 @@
 #include "qamgen.h"
 #include "rtos_buttonhandler.h"
 
-/*
-// USART options.
-static usart_rs232_options_t USART_SERIAL_OPTIONS = {
-	.baudrate = USART_SERIAL_EXAMPLE_BAUDRATE,
-	.charlength = USART_SERIAL_CHAR_LENGTH,
-	.paritytype = USART_SERIAL_PARITY,
-	.stopbits = USART_SERIAL_STOP_BIT
-};
-*/
-
 
 // test sinus lookup table for 2 periods (=> 2 DMA Channels)
 // 1 DMA channel sends data to DAC
 // => second DMA channel refill with datas
-// const sinus lookup table, do not use it, send idlebits instead
-const int16_t sinLookup100[NR_OF_SAMPLES*2] = {	0x0,0x27,0x9c,0x159,0x258,0x38e,0x4f0,0x670,
-												0x800,0x990,0xb10,0xc72,0xda8,0xea7,0xf64,0xfd9,
-												0xFFF,0xfd9,0xf64,0xea7,0xda8,0xc72,0xb10,0x990,
-												0x800,0x670,0x4f0,0x38e,0x258,0x159,0x9c,0x27,
-												0x0,0x27,0x9c,0x159,0x258,0x38e,0x4f0,0x670,
-												0x800,0x990,0xb10,0xc72,0xda8,0xea7,0xf64,0xfd9,
-												0xFFF,0xfd9,0xf64,0xea7,0xda8,0xc72,0xb10,0x990,
-												0x800,0x670,0x4f0,0x38e,0x258,0x159,0x9c,0x27};
-
 const int16_t Symbol_00_lookup[NR_OF_SAMPLES] = {	
 											0x0,0x27,0x9c,0x159,0x258,0x38e,0x4f0,0x670,
 											0x800,0x990,0xb10,0xc72,0xda8,0xea7,0xf64,0xfd9,
@@ -78,10 +58,10 @@ const int16_t Symbol_11_lookup[NR_OF_SAMPLES] = {
 
 
 //-----------const symbols-----------------------
-// const Idle Bit's
+// const Idle Symbols
 const uint8_t Idle_bits_1 = 0b01;
 const uint8_t Idle_bits_2 = 0b10;
-// const Sync bits
+// const Sync Symbol
 const uint8_t Sync_Symbol = 0b11;
 
 
@@ -150,7 +130,7 @@ void vQuamGen(void *pvParameters) {
 								
 			}
 		}	
-		vTaskDelay(100/portTICK_RATE_MS);
+		vTaskDelay(5/portTICK_RATE_MS);
 	}// end for
 }// end wamgen task
 
@@ -266,22 +246,7 @@ void createProtocoll( uint8_t Data_Length){
 	New_datas_rdy = true;	
 }// End create protocoll
 
-void vButtonTask(void *pvParameters) {
-	initButtonHandler();
-	setupButton(BUTTON1, &PORTF, 4, 1);
-	setupButton(BUTTON2, &PORTF, 5, 1);
-	setupButton(BUTTON3, &PORTF, 6, 1);
-	setupButton(BUTTON4, &PORTF, 7, 1);
-	vTaskDelay(3000);
-	
-	for(;;) {
-		
-		if(getButtonState(BUTTON1, true) == buttonState_Short){
-			//createProtocoll(4,132);
-		}
-		vTaskDelay(10/portTICK_RATE_MS);
-	}
-}
+
 
 
 void vInitUart(void){
@@ -335,88 +300,3 @@ ISR(DMA_CH1_vect)
 }
 
 
-
-/*	
-	
-	while(!(USARTC0.STATUS & USART_DREIF_bm));
-	USARTC0.DATA = 'G';
-	
-	
-	char* Data = "Hello, World";
-	while(*Data)
-	{
-		while(!(USARTC0.STATUS & USART_DREIF_bm));
-		USARTC0.DATA = *Data++;
-	}
-	
-	PMIC.CTRL = PMIC_LOLVLEN_bm;
-	sei();
-
-
-*/
-
-/* 
-// Button 1 send value 35
-// => sync (11), lenght (11) data (10 00 11)
-if(getButtonState(BUTTON1, true) == buttonState_Short){
-	// first add sync symbol to queue
-	protocoll_symbols[0] = Sync_Symbol;
-	
-	// add lenght symbol
-	protocoll_symbols[1] = 0b11;
-	
-	// data
-	protocoll_symbols[2] = 0b10;
-	protocoll_symbols[3] = 0b00;
-	protocoll_symbols[4] = 0b11;
-	SymbolCounter = 4;
-	
-	// send complete protocoll to queue
-	xQueueSend(xSymbolQueue, (void*) &protocoll_symbols, (TickType_t) 10);
-	New_datas_rdy = true;
-	
-}
-
-if(getButtonState(BUTTON2, false) == buttonState_Short){
-	// ft 132
-	// 1000 0100 -> 10 00 01 00
-	// sync - lenght	- data		- checksum
-	//	11     01 00   10 00 01 00  tbd
-	DataToSend = 132;
-	
-	
-	// first add sync symbol to queue
-	protocoll_symbols[0] = Sync_Symbol;
-	// add lenght symbol, length = 8bit => 4 symbol
-	// adjust lenght symbol, just for testing
-	
-	
-	protocoll_symbols[1] = 0b00;
-	protocoll_symbols[2] = 0b00;
-	protocoll_symbols[3] = 0b01;
-	protocoll_symbols[4] = 0b00;
-	
-	//data symbols
-	calc_symbol = DataToSend>>6 & 0b11;
-	protocoll_symbols[5] = calc_symbol;
-	calc_symbol = DataToSend>>4 & 0b11;
-	protocoll_symbols[6] = calc_symbol;
-	calc_symbol = DataToSend>>2 & 0b11;
-	protocoll_symbols[7] = calc_symbol;
-	calc_symbol = DataToSend & 0b11;
-	protocoll_symbols[8] = calc_symbol;
-	
-	// checksum
-	// data checksum => 10 + 00 + 01 + 00 => 3
-	// add length => 01 00 => 1 +3 = 4 => 01 00
-	protocoll_symbols[9]	= 0b01;
-	protocoll_symbols[10]	= 0b00;
-	
-	//symbol length
-	SymbolCounter = 10;
-	// send complete protocoll to queue
-	xQueueSend(xSymbolQueue, (void*) &protocoll_symbols, (TickType_t) 10);
-	New_datas_rdy=true;
-}
-
-*/

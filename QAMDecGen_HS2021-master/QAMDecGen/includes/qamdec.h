@@ -9,7 +9,7 @@
 #ifndef QAMDEC_H_
 #define QAMDEC_H_
 
-void vQuamDec(void* pvParameters);
+void vQuamDec();
 
 
 
